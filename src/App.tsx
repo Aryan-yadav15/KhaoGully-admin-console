@@ -3,7 +3,11 @@ import LoginPage from '@/pages/LoginPage';
 import DashboardPage from '@/pages/DashboardPage';
 import OrdersPage from '@/pages/OrdersPage';
 import DriversPage from '@/pages/DriversPage';
-import PoolsPage from '@/pages/PoolsPage';
+import PoolsPageNew from '@/pages/PoolsPageNew';
+import EarningsPage from '@/pages/EarningsPage';
+import RestaurantPaymentsPage from '@/pages/RestaurantPaymentsPage';
+import CommissionSettingsPage from '@/pages/CommissionSettingsPage';
+import WebSocketTest from '@/pages/WebSocketTest';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import DashboardLayout from '@/components/DashboardLayout';
 
@@ -47,7 +51,47 @@ function App() {
           element={
             <ProtectedRoute>
               <DashboardLayout>
-                <PoolsPage />
+                <PoolsPageNew />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/earnings"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout>
+                <EarningsPage />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/restaurant-payments"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout>
+                <RestaurantPaymentsPage />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout>
+                <CommissionSettingsPage />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ws-test"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout>
+                <WebSocketTest />
               </DashboardLayout>
             </ProtectedRoute>
           }

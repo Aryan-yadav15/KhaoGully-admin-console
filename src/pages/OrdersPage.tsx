@@ -26,21 +26,82 @@ export default function OrdersPage() {
   const [assignOrderId, setAssignOrderId] = useState<number | null>(null);
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
   const [driverEarnings, setDriverEarnings] = useState<string>('50');
+  const [isLive, setIsLive] = useState(false);
 
   useEffect(() => {
     loadOrders();
     loadDrivers();
-    const interval = setInterval(loadOrders, 10000);
-    return () => clearInterval(interval);
+    
+    // Initial load interval (fallback)
+    const interval = setInterval(loadOrders, 30000);
+
+    // WebSocket Connection
+    const token = localStorage.getItem('admin_token');
+    let ws: WebSocket | null = null;
+
+    if (token) {
+      // Determine WebSocket URL based on current environment
+      // If running via Vite proxy, we might need to point to localhost:8000 directly
+      // or use the same host if deployed
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsHost = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host;
+      const wsUrl = `${wsProtocol}//${wsHost}/api/v1/ws/admin?token=${token}`;
+
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        console.log('✅ [OrdersPage] WebSocket Connected to Live Updates');
+        console.log(`   URL: ${wsUrl}`);
+        setIsLive(true);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          console.log('📨 [OrdersPage] WebSocket message received:', event.data);
+          const message = JSON.parse(event.data);
+          console.log('   Parsed message:', message);
+          
+          if (message.type === 'order_update') {
+            console.log('🔄 [OrdersPage] Order update detected:', message.data);
+            console.log('   Reloading orders immediately...');
+            // Reload orders immediately on update
+            loadOrders();
+            // Optional: Show a toast notification
+          }
+        } catch (e) {
+          console.error('❌ [OrdersPage] Error parsing WS message', e);
+        }
+      };
+
+      ws.onclose = (event) => {
+        console.log('❌ [OrdersPage] WebSocket Disconnected from Live Updates');
+        console.log(`   Code: ${event.code}, Reason: ${event.reason || 'None'}`);
+        setIsLive(false);
+      };
+
+      ws.onerror = (error) => {
+        console.error('⚠️ [OrdersPage] WebSocket error:', error);
+        setIsLive(false);
+      };
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (ws) {
+        ws.close();
+      }
+    };
   }, [statusFilter]);
 
   const loadOrders = async () => {
+    console.log('🔄 [OrdersPage] Loading orders...');
     try {
       const params = statusFilter ? { status: statusFilter } : {};
       const response = await api.get('/orders', { params });
+      console.log(`✅ [OrdersPage] Loaded ${response.data.length} orders`);
       setOrders(response.data);
     } catch (error) {
-      console.error('Failed to load orders:', error);
+      console.error('❌ [OrdersPage] Failed to load orders:', error);
     } finally {
       setLoading(false);
     }
@@ -49,8 +110,10 @@ export default function OrdersPage() {
   const loadDrivers = async () => {
     try {
       const response = await api.get('/drivers');
-      // Allow APPROVED and ACTIVE drivers
-      setDrivers(response.data.filter((d: any) => ['APPROVED', 'ACTIVE'].includes(d.status)));
+      // Only show drivers who are ONLINE and APPROVED/ACTIVE
+      setDrivers(response.data.filter((d: any) => 
+        ['APPROVED', 'ACTIVE'].includes(d.status) && d.is_online === true
+      ));
     } catch (error) {
       console.error('Failed to load drivers:', error);
     }
@@ -102,9 +165,22 @@ export default function OrdersPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
-            Orders
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
+              Orders
+            </h1>
+            {isLive ? (
+              <span className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-600 text-xs font-bold rounded-full border border-emerald-100 animate-pulse">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
+                LIVE
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 text-slate-500 text-xs font-bold rounded-full border border-slate-200">
+                <span className="w-2 h-2 bg-slate-400 rounded-full"></span>
+                OFFLINE
+              </span>
+            )}
+          </div>
           <p className="text-slate-500 mt-1">Manage and track delivery orders</p>
         </div>
         <div className="flex flex-wrap gap-3">

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
+import LiveMap from '../components/LiveMap';
 import { Package, Clock, Users, DollarSign, TrendingUp, RefreshCw, ArrowUpRight, ArrowDownRight, Activity } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -39,7 +40,8 @@ export default function DashboardPage() {
 
     // Use correct protocol (ws/wss)
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//localhost:8000/api/v1/ws/admin?token=${token}`;
+    const wsHost = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host;
+    const wsUrl = `${protocol}//${wsHost}/api/v1/ws/admin?token=${token}`;
     
     const ws = new WebSocket(wsUrl);
 
@@ -65,6 +67,10 @@ export default function DashboardPage() {
           };
           
           setActivities(prev => [newActivity, ...prev].slice(0, 5));
+        } else if (message.type === 'driver_status_update') {
+          console.log('🚗 Driver Status Update:', message.data);
+          // Refresh stats when driver goes online/offline
+          loadStats();
         }
       } catch (e) {
         console.error('WebSocket message error:', e);
@@ -109,15 +115,15 @@ export default function DashboardPage() {
   };
 
   const StatCard = ({ title, value, icon: Icon, trend, trendValue, colorClass }: any) => (
-    <div className="glass-card p-6 rounded-2xl transition-all duration-300 hover:-translate-y-1 hover:shadow-xl relative overflow-hidden group">
-      <div className={`absolute top-0 right-0 w-32 h-32 bg-linear-to-br ${colorClass} opacity-10 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110`}></div>
+    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 group relative overflow-hidden">
+      <div className={`absolute top-0 right-0 w-24 h-24 bg-linear-to-br ${colorClass} opacity-5 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110`}></div>
       
       <div className="flex justify-between items-start mb-4 relative z-10">
-        <div className={`p-3 rounded-xl bg-linear-to-br ${colorClass} text-white shadow-lg`}>
-          <Icon className="w-6 h-6" />
+        <div className={`p-3 rounded-xl bg-linear-to-br ${colorClass} text-white shadow-sm group-hover:shadow-md transition-shadow`}>
+          <Icon className="w-5 h-5" />
         </div>
         {trend && (
-          <div className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full ${trend === 'up' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+          <div className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${trend === 'up' ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-red-50 text-red-600 border border-red-100'}`}>
             {trend === 'up' ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
             {trendValue}
           </div>
@@ -125,14 +131,14 @@ export default function DashboardPage() {
       </div>
       
       <div className="relative z-10">
-        <h3 className="text-slate-500 text-sm font-medium mb-1">{title}</h3>
-        <p className="text-3xl font-bold text-slate-800 tracking-tight">{value}</p>
+        <h3 className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">{title}</h3>
+        <p className="text-3xl font-bold text-slate-900 tracking-tight">{value}</p>
       </div>
     </div>
   );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 max-w-[1600px] mx-auto">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -140,8 +146,11 @@ export default function DashboardPage() {
           <p className="text-slate-500 mt-1">Overview of your delivery operations</p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-slate-500 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm flex items-center gap-2">
-            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+          <span className="text-xs font-medium text-slate-600 bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-sm flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+            </span>
             System Operational
           </span>
           <button
@@ -155,7 +164,7 @@ export default function DashboardPage() {
       </div>
       
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 lg:gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         <StatCard
           title="Active Orders"
           value={stats.activeOrders}
@@ -193,17 +202,24 @@ export default function DashboardPage() {
         />
       </div>
 
+      {/* Live Map Section */}
+      <div className="w-full">
+        <LiveMap />
+      </div>
+
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* Chart Section */}
-        <div className="lg:col-span-2 glass-card p-6 rounded-2xl">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-orange-500" />
+        <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <div className="p-2 bg-orange-50 rounded-lg">
+                <TrendingUp className="w-5 h-5 text-orange-500" />
+              </div>
               Revenue & Orders
             </h2>
-            <select className="text-sm border-none bg-slate-100 rounded-lg px-3 py-1 outline-none focus:ring-2 focus:ring-orange-200">
+            <select className="text-sm border border-slate-200 bg-white rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-500 transition-all text-slate-600 font-medium">
               <option>Today</option>
               <option>This Week</option>
               <option>This Month</option>
@@ -215,20 +231,21 @@ export default function DashboardPage() {
               <AreaChart data={data}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
+                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.1}/>
                     <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
                   </linearGradient>
                   <linearGradient id="colorOrders" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f97316" stopOpacity={0.3}/>
+                    <stop offset="5%" stopColor="#f97316" stopOpacity={0.1}/>
                     <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 500}} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 500}} />
                 <Tooltip 
-                  contentStyle={{backgroundColor: '#fff', borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'}}
+                  contentStyle={{backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'}}
                   itemStyle={{fontSize: '12px', fontWeight: 600}}
+                  cursor={{stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4'}}
                 />
                 <Area type="monotone" dataKey="revenue" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
                 <Area type="monotone" dataKey="orders" stroke="#f97316" strokeWidth={3} fillOpacity={1} fill="url(#colorOrders)" />
@@ -238,10 +255,12 @@ export default function DashboardPage() {
         </div>
 
         {/* Recent Activity Feed */}
-        <div className="glass-card p-6 rounded-2xl">
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-              <Activity className="w-5 h-5 text-blue-500" />
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <div className="p-2 bg-blue-50 rounded-lg">
+                <Activity className="w-5 h-5 text-blue-500" />
+              </div>
               Live Activity
             </h2>
           </div>
@@ -262,13 +281,16 @@ export default function DashboardPage() {
                 </div>
               ))
             ) : (
-              <div className="text-center py-8 text-slate-400 text-sm">
-                No recent activity
+              <div className="text-center py-12">
+                <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Activity className="w-5 h-5 text-slate-300" />
+                </div>
+                <p className="text-slate-400 text-sm font-medium">No recent activity</p>
               </div>
             )}
           </div>
           
-          <button className="w-full mt-6 py-2 text-sm font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-50 rounded-lg transition-colors">
+          <button className="w-full mt-6 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-200">
             View All Activity
           </button>
         </div>

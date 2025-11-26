@@ -1,5 +1,5 @@
 import { useAuthStore } from '@/store/authStore';
-import { LogOut, Menu, Home, Package, Users, Layers, ChevronRight, Bell, Search } from 'lucide-react';
+import { LogOut, Menu, Home, Package, Users, Layers, ChevronRight, Bell, Search, DollarSign, Store, Settings } from 'lucide-react';
 import { useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 
@@ -15,6 +15,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { path: '/orders', label: 'Orders', icon: Package },
     { path: '/drivers', label: 'Drivers', icon: Users },
     { path: '/pools', label: 'Pools', icon: Layers },
+    { path: '/earnings', label: 'Driver Earnings', icon: DollarSign },
+    { path: '/restaurant-payments', label: 'Restaurant Payments', icon: Store },
+    { path: '/settings', label: 'Settings', icon: Settings },
   ];
 
   return (
