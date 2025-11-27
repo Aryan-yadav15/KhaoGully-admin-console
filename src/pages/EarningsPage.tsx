@@ -118,12 +118,13 @@ export default function EarningsPage() {
   const handleViewDetails = async (driver: DriverEarningSummary) => {
     try {
       setSelectedDriver(driver);
-      const response = await api.get(`/earnings/drivers/${driver.driver_id}?show_paid=false`);
-      setEarningDetails(response.data.earnings);
       setDetailDialogOpen(true);
+      const response = await api.get(`/earnings/drivers/${driver.driver_id}?show_paid=true`);
+      setEarningDetails(response.data.earnings);
     } catch (error) {
       console.error('Failed to fetch driver details:', error);
       setAlert({ type: 'error', message: 'Failed to load driver details' });
+      setDetailDialogOpen(false);
     }
   };
 

@@ -13,12 +13,20 @@ const RestaurantPaymentsPage = () => {
   const [showPayoutModal, setShowPayoutModal] = useState(false);
   const [showCommissionModal, setShowCommissionModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showEditBankModal, setShowEditBankModal] = useState(false);
   const [selectedRestaurantDetail, setSelectedRestaurantDetail] = useState<any>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [selectedRestaurantForCommission, setSelectedRestaurantForCommission] = useState<any>(null);
   const [commissionRates, setCommissionRates] = useState<CommissionRate[]>([]);
   const [selectedCommissionRateId, setSelectedCommissionRateId] = useState<number | null>(null);
   const [commissionNotes, setCommissionNotes] = useState('');
+  const [bankDetailsForm, setBankDetailsForm] = useState({
+    bank_account_number: '',
+    bank_ifsc_code: '',
+    bank_account_holder_name: '',
+    upi_id: ''
+  });
+  const [savingBankDetails, setSavingBankDetails] = useState(false);
   const [payoutData, setPayoutData] = useState({
     payment_method: 'bank_transfer',
     payment_reference: '',
@@ -118,6 +126,46 @@ const RestaurantPaymentsPage = () => {
     } catch (error) {
       console.error('Error assigning commission rate:', error);
       alert('Failed to assign commission rate');
+    }
+  };
+
+  const handleOpenEditBankDetails = () => {
+    if (!selectedRestaurantDetail) return;
+    
+    setBankDetailsForm({
+      bank_account_number: selectedRestaurantDetail.summary.bank_account_number || '',
+      bank_ifsc_code: selectedRestaurantDetail.summary.bank_ifsc_code || '',
+      bank_account_holder_name: selectedRestaurantDetail.summary.bank_account_holder_name || '',
+      upi_id: selectedRestaurantDetail.summary.upi_id || ''
+    });
+    setShowEditBankModal(true);
+  };
+
+  const handleSaveBankDetails = async () => {
+    if (!selectedRestaurantDetail) return;
+
+    try {
+      setSavingBankDetails(true);
+      const token = localStorage.getItem('admin_token');
+      
+      await axios.patch(
+        `${API_URL}/restaurants/${selectedRestaurantDetail.summary.restaurant_id}`,
+        bankDetailsForm,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      alert('✓ Bank details updated successfully!');
+      setShowEditBankModal(false);
+      
+      // Refresh details
+      handleViewDetails(selectedRestaurantDetail.summary.restaurant_id);
+      // Refresh main list
+      fetchData();
+    } catch (error) {
+      console.error('Error updating bank details:', error);
+      alert('Failed to update bank details');
+    } finally {
+      setSavingBankDetails(false);
     }
   };
 
@@ -478,14 +526,32 @@ const RestaurantPaymentsPage = () => {
 
                     {/* Right Column: Bank & Payment Info */}
                     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 font-semibold text-gray-700">
-                        Payment Information
+                      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 font-semibold text-gray-700 flex justify-between items-center">
+                        <span>Payment Information</span>
+                        <button
+                          onClick={handleOpenEditBankDetails}
+                          className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 transition-colors"
+                        >
+                          Edit Details
+                        </button>
                       </div>
                       <div className="p-4 space-y-4">
                         <div className="flex justify-between items-center py-2 border-b border-gray-100">
                           <span className="text-gray-600">Bank Account</span>
                           <span className="font-medium">
                             {selectedRestaurantDetail.summary.bank_account_number || 'Not provided'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                          <span className="text-gray-600">IFSC Code</span>
+                          <span className="font-medium">
+                            {selectedRestaurantDetail.summary.bank_ifsc_code || 'Not provided'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                          <span className="text-gray-600">Account Holder</span>
+                          <span className="font-medium">
+                            {selectedRestaurantDetail.summary.bank_account_holder_name || 'Not provided'}
                           </span>
                         </div>
                         <div className="flex justify-between items-center py-2 border-b border-gray-100">
@@ -597,6 +663,97 @@ const RestaurantPaymentsPage = () => {
                 className="px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Bank Details Modal */}
+      {showEditBankModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">
+              Edit Bank Details
+            </h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Account Holder Name
+                </label>
+                <input
+                  type="text"
+                  value={bankDetailsForm.bank_account_holder_name}
+                  onChange={(e) => setBankDetailsForm({ ...bankDetailsForm, bank_account_holder_name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g. Khao Gully Foods Pvt Ltd"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Bank Account Number
+                </label>
+                <input
+                  type="text"
+                  value={bankDetailsForm.bank_account_number}
+                  onChange={(e) => setBankDetailsForm({ ...bankDetailsForm, bank_account_number: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g. 1234567890"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  IFSC Code
+                </label>
+                <input
+                  type="text"
+                  value={bankDetailsForm.bank_ifsc_code}
+                  onChange={(e) => setBankDetailsForm({ ...bankDetailsForm, bank_ifsc_code: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g. HDFC0001234"
+                />
+              </div>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-200"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white text-gray-500">OR</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  UPI ID
+                </label>
+                <input
+                  type="text"
+                  value={bankDetailsForm.upi_id}
+                  onChange={(e) => setBankDetailsForm({ ...bankDetailsForm, upi_id: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g. restaurant@upi"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowEditBankModal(false)}
+                disabled={savingBankDetails}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveBankDetails}
+                disabled={savingBankDetails}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 font-medium"
+              >
+                {savingBankDetails ? 'Saving...' : 'Save Details'}
               </button>
             </div>
           </div>

@@ -4,7 +4,8 @@ import DashboardPage from '@/pages/DashboardPage';
 import OrdersPage from '@/pages/OrdersPage';
 import DriversPage from '@/pages/DriversPage';
 import PoolsPageNew from '@/pages/PoolsPageNew';
-import EarningsPage from '@/pages/EarningsPage';
+// import EarningsPage from '@/pages/EarningsPage';
+import EarningsPageEnhanced from '@/pages/EarningsPageEnhanced';
 import RestaurantPaymentsPage from '@/pages/RestaurantPaymentsPage';
 import CommissionSettingsPage from '@/pages/CommissionSettingsPage';
 import WebSocketTest from '@/pages/WebSocketTest';
@@ -61,7 +62,7 @@ function App() {
           element={
             <ProtectedRoute>
               <DashboardLayout>
-                <EarningsPage />
+                <EarningsPageEnhanced />
               </DashboardLayout>
             </ProtectedRoute>
           }
