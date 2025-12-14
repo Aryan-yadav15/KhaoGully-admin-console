@@ -14,6 +14,7 @@ const RestaurantPaymentsPage = () => {
   const [showCommissionModal, setShowCommissionModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showEditBankModal, setShowEditBankModal] = useState(false);
+  const [showEditContactModal, setShowEditContactModal] = useState(false);
   const [selectedRestaurantDetail, setSelectedRestaurantDetail] = useState<any>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [selectedRestaurantForCommission, setSelectedRestaurantForCommission] = useState<any>(null);
@@ -27,12 +28,18 @@ const RestaurantPaymentsPage = () => {
     upi_id: ''
   });
   const [savingBankDetails, setSavingBankDetails] = useState(false);
+  const [contactForm, setContactForm] = useState({
+    phone: '',
+    email: ''
+  });
+  const [savingContact, setSavingContact] = useState(false);
   const [payoutData, setPayoutData] = useState({
     payment_method: 'bank_transfer',
     payment_reference: '',
     notes: ''
   });
   const [processingPayout, setProcessingPayout] = useState(false);
+  const [syncingToPortal, setSyncingToPortal] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -166,6 +173,67 @@ const RestaurantPaymentsPage = () => {
       alert('Failed to update bank details');
     } finally {
       setSavingBankDetails(false);
+    }
+  };
+
+  const handleSaveContact = async () => {
+    if (!selectedRestaurantDetail) return;
+
+    if (!contactForm.phone) {
+      alert('Phone number is required for syncing to portal');
+      return;
+    }
+
+    try {
+      setSavingContact(true);
+      const token = localStorage.getItem('admin_token');
+      
+      await axios.patch(
+        `${API_URL}/restaurants/${selectedRestaurantDetail.summary.restaurant_id}`,
+        {
+          phone: contactForm.phone,
+          email: contactForm.email
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      alert('✅ Contact info updated! You can now sync to portal.');
+      setShowEditContactModal(false);
+      
+      // Refresh details
+      handleViewDetails(selectedRestaurantDetail.summary.restaurant_id);
+      fetchData();
+    } catch (error) {
+      console.error('Error saving contact:', error);
+      alert('❌ Failed to update contact info');
+    } finally {
+      setSavingContact(false);
+    }
+  };
+
+  const handleSyncToPortal = async (restaurantId: number, restaurantName: string) => {
+    if (!confirm(`Sync "${restaurantName}" earnings to restaurant portal?\n\nThis will send:\n- Earnings summary\n- Order statistics\n- Commission info\n\nBank details will NOT be synced.`)) {
+      return;
+    }
+
+    try {
+      setSyncingToPortal(true);
+      const token = localStorage.getItem('admin_token');
+      const response = await axios.post(
+        `${API_URL}/restaurant-earnings/sync-to-restaurant-portal/${restaurantId}`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (response.data.success) {
+        alert(`✅ Successfully synced to restaurant portal!\n\nRestaurant: ${response.data.restaurant_name}\nEarnings: ₹${response.data.data_summary.total_lifetime_earnings}\nOrders: ${response.data.data_summary.total_completed_orders}`);
+      }
+    } catch (error: any) {
+      console.error('Sync error:', error);
+      const errorMsg = error.response?.data?.detail || 'Failed to sync to restaurant portal';
+      alert(`❌ Sync Failed\n\n${errorMsg}`);
+    } finally {
+      setSyncingToPortal(false);
     }
   };
 
@@ -430,17 +498,34 @@ const RestaurantPaymentsPage = () => {
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
             <div className="p-6 border-b border-gray-200 flex justify-between items-center bg-gray-50">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-800">
-                  {loadingDetail ? 'Loading...' : selectedRestaurantDetail?.summary.restaurant_name}
-                </h2>
+              <div className="flex-1">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-2xl font-bold text-gray-800">
+                    {loadingDetail ? 'Loading...' : selectedRestaurantDetail?.summary.restaurant_name}
+                  </h2>
+                  {!loadingDetail && selectedRestaurantDetail && (
+                    <button
+                      onClick={() => {
+                        setContactForm({
+                          phone: selectedRestaurantDetail.summary.restaurant_phone || '',
+                          email: selectedRestaurantDetail.summary.restaurant_email || ''
+                        });
+                        setShowEditContactModal(true);
+                      }}
+                      className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200 transition-colors"
+                      title="Edit contact info"
+                    >
+                      Edit Contact
+                    </button>
+                  )}
+                </div>
                 {!loadingDetail && selectedRestaurantDetail && (
                   <div className="text-sm text-gray-600 mt-1 flex gap-4">
                     <span>ID: {selectedRestaurantDetail.summary.restaurant_id}</span>
                     <span>•</span>
-                    <span>{selectedRestaurantDetail.summary.restaurant_phone}</span>
+                    <span>{selectedRestaurantDetail.summary.restaurant_phone || '❌ No phone'}</span>
                     <span>•</span>
-                    <span>{selectedRestaurantDetail.summary.restaurant_email}</span>
+                    <span>{selectedRestaurantDetail.summary.restaurant_email || '❌ No email'}</span>
                   </div>
                 )}
               </div>
@@ -657,7 +742,33 @@ const RestaurantPaymentsPage = () => {
             </div>
             
             {/* Modal Footer */}
-            <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-end">
+            <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
+              <button
+                onClick={() => handleSyncToPortal(
+                  selectedRestaurantDetail?.summary.restaurant_id,
+                  selectedRestaurantDetail?.summary.restaurant_name
+                )}
+                disabled={syncingToPortal || !selectedRestaurantDetail}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                title="Send earnings data to restaurant portal (bank details will NOT be synced)"
+              >
+                {syncingToPortal ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Syncing...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    Sync to Portal
+                  </>
+                )}
+              </button>
               <button
                 onClick={() => setShowDetailModal(false)}
                 className="px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
@@ -754,6 +865,66 @@ const RestaurantPaymentsPage = () => {
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 font-medium"
               >
                 {savingBankDetails ? 'Saving...' : 'Save Details'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Contact Modal */}
+      {showEditContactModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">
+              Edit Contact Information
+            </h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Phone Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={contactForm.phone}
+                  onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  placeholder="e.g. +91-1234567890"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Required for syncing to restaurant portal
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  value={contactForm.email}
+                  onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  placeholder="e.g. restaurant@example.com"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowEditContactModal(false)}
+                disabled={savingContact}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveContact}
+                disabled={savingContact || !contactForm.phone}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 font-medium"
+              >
+                {savingContact ? 'Saving...' : 'Save Contact'}
               </button>
             </div>
           </div>
