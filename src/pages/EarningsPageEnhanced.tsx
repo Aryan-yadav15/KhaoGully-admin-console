@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
+import { format, startOfDay, endOfDay, isWithinInterval, parseISO } from 'date-fns';
 import {
   DollarSign,
   TrendingUp,
@@ -10,6 +11,7 @@ import {
   AlertCircle,
   X,
   Check,
+  CalendarDays,
 } from 'lucide-react';
 
 interface DriverEarningSummary {
@@ -88,10 +90,41 @@ export default function EarningsPageEnhanced() {
     upi_id: ''
   });
   const [savingBank, setSavingBank] = useState(false);
+  
+  // Date Filter State
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [filteredEarningDetails, setFilteredEarningDetails] = useState<EarningDetail[]>([]);
 
   useEffect(() => {
     fetchData();
   }, []);
+  
+  useEffect(() => {
+    // Filter earnings based on date range
+    if (!startDate && !endDate) {
+      setFilteredEarningDetails(earningDetails);
+      return;
+    }
+    
+    const filtered = earningDetails.filter((earning) => {
+      const earningDate = parseISO(earning.earned_at);
+      
+      if (startDate && endDate) {
+        return isWithinInterval(earningDate, {
+          start: startOfDay(new Date(startDate)),
+          end: endOfDay(new Date(endDate))
+        });
+      } else if (startDate) {
+        return earningDate >= startOfDay(new Date(startDate));
+      } else if (endDate) {
+        return earningDate <= endOfDay(new Date(endDate));
+      }
+      return true;
+    });
+    
+    setFilteredEarningDetails(filtered);
+  }, [startDate, endDate, earningDetails]);
 
   const fetchData = async () => {
     try {
@@ -834,7 +867,43 @@ export default function EarningsPageEnhanced() {
 
                   {/* Earnings History Table */}
                   <div>
-                    <h3 className="text-lg font-bold text-slate-800 mb-4">Earnings History</h3>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-bold text-slate-800">Earnings History</h3>
+                      
+                      {/* Date Filter */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <CalendarDays className="w-4 h-4 text-slate-600" />
+                          <input
+                            type="date"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                            placeholder="Start Date"
+                          />
+                          <span className="text-slate-500">to</span>
+                          <input
+                            type="date"
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                            className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                            placeholder="End Date"
+                          />
+                          {(startDate || endDate) && (
+                            <button
+                              onClick={() => {
+                                setStartDate('');
+                                setEndDate('');
+                              }}
+                              className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                              title="Clear filter"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                     <div className="overflow-x-auto border border-slate-200 rounded-lg">
                       <table className="w-full text-sm text-left">
                         <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
@@ -852,7 +921,7 @@ export default function EarningsPageEnhanced() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {earningDetails.map((earning) => (
+                          {filteredEarningDetails.map((earning) => (
                             <tr key={earning.id} className="hover:bg-slate-50">
                               <td className="px-4 py-3 text-slate-600">
                                 {new Date(earning.earned_at).toLocaleDateString('en-IN', {
@@ -924,21 +993,32 @@ export default function EarningsPageEnhanced() {
                               </td>
                             </tr>
                           ))}
-                          {earningDetails.length === 0 && (
+                          {filteredEarningDetails.length === 0 && (
                             <tr>
                               <td colSpan={10} className="px-4 py-8 text-center text-slate-500">
-                                No earnings records found
+                                {(startDate || endDate) ? 'No earnings found for the selected date range' : 'No earnings records found'}
                               </td>
                             </tr>
                           )}
                         </tbody>
                       </table>
                     </div>
-                    {earningDetails.length > 10 && (
-                      <div className="text-center mt-2 text-sm text-slate-500">
-                        Showing all {earningDetails.length} records
+                    <div className="flex justify-between items-center mt-2 text-sm text-slate-500">
+                      <div>
+                        {(startDate || endDate) && (
+                          <span>
+                            Filtered: {filteredEarningDetails.length} of {earningDetails.length} records
+                          </span>
+                        )}
                       </div>
-                    )}
+                      <div>
+                        {filteredEarningDetails.length > 0 && (
+                          <span>
+                            Total: ₹{filteredEarningDetails.reduce((sum, e) => sum + e.total_earning + e.adjustment_amount, 0).toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

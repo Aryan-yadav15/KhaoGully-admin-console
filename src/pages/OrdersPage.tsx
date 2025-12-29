@@ -136,6 +136,34 @@ export default function OrdersPage() {
     }
   };
 
+  const unassignOrder = async (orderId: number, orderDriver: string) => {
+    if (!confirm(`⚠️ DEV TOOL: Unassign Order?\n\nThis will unassign order #${orderId} from ${orderDriver}.\n\nDriver will be notified via WebSocket.\n\nContinue?`)) {
+      return;
+    }
+
+    try {
+      await api.post(`/orders/${orderId}/unassign`);
+      loadOrders();
+      alert(`✅ Order #${orderId} unassigned from ${orderDriver}`);
+    } catch (error: any) {
+      alert(error.response?.data?.detail || 'Failed to unassign order');
+    }
+  };
+
+  const markAsDelivered = async (orderId: number) => {
+    if (!confirm('Mark this order as DELIVERED?\n\nThis will:\n• Update order status to DELIVERED\n• Create driver earnings\n• Create restaurant earnings\n• Create financial records\n\nThis action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await api.post(`/orders/${orderId}/admin-deliver`);
+      loadOrders();
+      alert('✅ Order marked as delivered successfully!');
+    } catch (error: any) {
+      alert(error.response?.data?.detail || 'Failed to mark order as delivered');
+    }
+  };
+
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       PENDING: 'bg-slate-100 text-slate-600 border-slate-200',
@@ -279,23 +307,42 @@ export default function OrdersPage() {
                     {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </td>
                   <td className="px-6 py-4">
-                    {order.status === 'PENDING' && (
-                      <button
-                        onClick={() => {
-                          setAssignOrderId(order.id);
-                          setShowAssignModal(true);
-                        }}
-                        className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg text-xs font-semibold transition-all"
-                      >
-                        Assign Driver
-                      </button>
-                    )}
-                    {order.status === 'IN_TRANSIT' && order.otp && (
-                      <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
-                        <span className="text-xs font-semibold text-amber-700">OTP:</span>
-                        <span className="text-sm font-bold text-amber-800 font-mono tracking-wider">{order.otp}</span>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {order.status === 'PENDING' && (
+                        <button
+                          onClick={() => {
+                            setAssignOrderId(order.id);
+                            setShowAssignModal(true);
+                          }}
+                          className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg text-xs font-semibold transition-all"
+                        >
+                          Assign Driver
+                        </button>
+                      )}
+                      {['ASSIGNED', 'ACCEPTED'].includes(order.status) && order.driver_name && (
+                        <button
+                          onClick={() => unassignOrder(order.id, order.driver_name || 'driver')}
+                          className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200 rounded-lg text-xs font-semibold transition-all"
+                          title="⚠️ Dev Tool: Unassign order from driver"
+                        >
+                          🔄 Unassign
+                        </button>
+                      )}
+                      {['ASSIGNED', 'ACCEPTED', 'PICKED_UP', 'IN_TRANSIT'].includes(order.status) && (
+                        <button
+                          onClick={() => markAsDelivered(order.id)}
+                          className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 rounded-lg text-xs font-semibold transition-all"
+                        >
+                          ✓ Mark Delivered
+                        </button>
+                      )}
+                      {order.status === 'IN_TRANSIT' && order.otp && (
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                          <span className="text-xs font-semibold text-amber-700">OTP:</span>
+                          <span className="text-sm font-bold text-amber-800 font-mono tracking-wider">{order.otp}</span>
+                        </div>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

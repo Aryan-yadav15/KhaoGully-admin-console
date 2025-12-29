@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { commissionApi, type CommissionRate } from '@/lib/commissionApi';
+import { format, startOfDay, endOfDay, isWithinInterval, parseISO } from 'date-fns';
+import { CalendarDays } from 'lucide-react';
 
 const API_URL = 'http://localhost:8000/api/v1';
 
@@ -40,6 +42,11 @@ const RestaurantPaymentsPage = () => {
   });
   const [processingPayout, setProcessingPayout] = useState(false);
   const [syncingToPortal, setSyncingToPortal] = useState(false);
+  
+  // Date Filter State for Restaurant Earnings Modal
+  const [restaurantStartDate, setRestaurantStartDate] = useState<string>('');
+  const [restaurantEndDate, setRestaurantEndDate] = useState<string>('');
+  const [filteredRestaurantEarnings, setFilteredRestaurantEarnings] = useState<any[]>([]);
 
   const fetchData = async () => {
     try {
@@ -69,6 +76,37 @@ const RestaurantPaymentsPage = () => {
   useEffect(() => {
     fetchData();
   }, [filterStatus]);
+  
+  useEffect(() => {
+    // Filter restaurant earnings based on date range
+    if (!selectedRestaurantDetail?.earnings) {
+      setFilteredRestaurantEarnings([]);
+      return;
+    }
+    
+    if (!restaurantStartDate && !restaurantEndDate) {
+      setFilteredRestaurantEarnings(selectedRestaurantDetail.earnings);
+      return;
+    }
+    
+    const filtered = selectedRestaurantDetail.earnings.filter((earning: any) => {
+      const earningDate = parseISO(earning.earned_at);
+      
+      if (restaurantStartDate && restaurantEndDate) {
+        return isWithinInterval(earningDate, {
+          start: startOfDay(new Date(restaurantStartDate)),
+          end: endOfDay(new Date(restaurantEndDate))
+        });
+      } else if (restaurantStartDate) {
+        return earningDate >= startOfDay(new Date(restaurantStartDate));
+      } else if (restaurantEndDate) {
+        return earningDate <= endOfDay(new Date(restaurantEndDate));
+      }
+      return true;
+    });
+    
+    setFilteredRestaurantEarnings(filtered);
+  }, [restaurantStartDate, restaurantEndDate, selectedRestaurantDetail]);
 
   const handleSelectAll = () => {
     if (selectedRestaurants.length === restaurants.length) {
@@ -663,7 +701,43 @@ const RestaurantPaymentsPage = () => {
 
                   {/* Recent Earnings Table */}
                   <div>
-                    <h3 className="text-lg font-bold text-gray-800 mb-4">Recent Earnings History</h3>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-bold text-gray-800">Recent Earnings History</h3>
+                      
+                      {/* Date Filter */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <CalendarDays className="w-4 h-4 text-gray-600" />
+                          <input
+                            type="date"
+                            value={restaurantStartDate}
+                            onChange={(e) => setRestaurantStartDate(e.target.value)}
+                            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                            placeholder="Start Date"
+                          />
+                          <span className="text-gray-500">to</span>
+                          <input
+                            type="date"
+                            value={restaurantEndDate}
+                            onChange={(e) => setRestaurantEndDate(e.target.value)}
+                            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                            placeholder="End Date"
+                          />
+                          {(restaurantStartDate || restaurantEndDate) && (
+                            <button
+                              onClick={() => {
+                                setRestaurantStartDate('');
+                                setRestaurantEndDate('');
+                              }}
+                              className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                              title="Clear filter"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                     <div className="overflow-x-auto border border-gray-200 rounded-lg">
                       <table className="w-full text-sm text-left">
                         <thead className="bg-gray-50 text-gray-700 font-semibold border-b border-gray-200">
@@ -671,14 +745,15 @@ const RestaurantPaymentsPage = () => {
                             <th className="px-4 py-3">Date</th>
                             <th className="px-4 py-3">Order ID</th>
                             <th className="px-4 py-3 text-center">Order Status</th>
-                            <th className="px-4 py-3 text-right">Order Total</th>
+                            <th className="px-4 py-3 text-right">Food Value</th>
+                            <th className="px-4 py-3 text-right">Delivery</th>
                             <th className="px-4 py-3 text-right">Commission</th>
                             <th className="px-4 py-3 text-right">Net Earning</th>
                             <th className="px-4 py-3 text-center">Payout Status</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                          {selectedRestaurantDetail.earnings.slice(0, 10).map((earning: any) => (
+                          {filteredRestaurantEarnings.map((earning: any) => (
                             <tr key={earning.id} className="hover:bg-gray-50">
                               <td className="px-4 py-3 text-gray-600">
                                 {new Date(earning.earned_at).toLocaleDateString()}
@@ -697,8 +772,17 @@ const RestaurantPaymentsPage = () => {
                                   {earning.order_status || 'N/A'}
                                 </span>
                               </td>
-                              <td className="px-4 py-3 text-right text-gray-600">
-                                {formatCurrency(earning.order_total)}
+                              <td className="px-4 py-3 text-right text-gray-900">
+                                {formatCurrency(earning.food_value || (earning.order_total - (earning.delivery_fee || 0)))}
+                              </td>
+                              <td className="px-4 py-3 text-right text-gray-500">
+                                {earning.delivery_fee && earning.delivery_fee > 0 && earning.delivery_fee !== 10 && earning.delivery_fee !== 30
+                                  ? formatCurrency(earning.delivery_fee)
+                                  : <span className="text-gray-400">N/A</span>
+                                }
+                                {earning.delivery_fee && earning.delivery_fee > 0 && earning.delivery_fee !== 10 && earning.delivery_fee !== 30 && (
+                                  <span className="text-xs block text-gray-400">Platform</span>
+                                )}
                               </td>
                               <td className="px-4 py-3 text-right text-red-500">
                                 -{formatCurrency(earning.platform_commission)}
@@ -717,21 +801,32 @@ const RestaurantPaymentsPage = () => {
                               </td>
                             </tr>
                           ))}
-                          {selectedRestaurantDetail.earnings.length === 0 && (
+                          {filteredRestaurantEarnings.length === 0 && (
                             <tr>
-                              <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
-                                No earnings records found
+                              <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                                {(restaurantStartDate || restaurantEndDate) ? 'No earnings found for the selected date range' : 'No earnings records found'}
                               </td>
                             </tr>
                           )}
                         </tbody>
                       </table>
                     </div>
-                    {selectedRestaurantDetail.earnings.length > 10 && (
-                      <div className="text-center mt-2 text-sm text-gray-500">
-                        Showing recent 10 of {selectedRestaurantDetail.earnings.length} records
+                    <div className="flex justify-between items-center mt-2 text-sm text-gray-500">
+                      <div>
+                        {(restaurantStartDate || restaurantEndDate) && (
+                          <span>
+                            Filtered: {filteredRestaurantEarnings.length} of {selectedRestaurantDetail.earnings.length} records
+                          </span>
+                        )}
                       </div>
-                    )}
+                      <div>
+                        {filteredRestaurantEarnings.length > 0 && (
+                          <span>
+                            Total: ₹{filteredRestaurantEarnings.reduce((sum: number, e: any) => sum + e.net_amount, 0).toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               ) : (

@@ -13,6 +13,7 @@ interface Pool {
   total_value: number;
   pending_orders: number;
   assigned_orders: number;
+  delivered_orders: number;
   restaurant_count: number;
 }
 
@@ -296,9 +297,23 @@ export default function PoolsPageNew() {
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-bold text-slate-800">Pool #{pool.pool_id}</span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium text-white ${getStatusColor(pool.status)}`}>
-                      {pool.status}
-                    </span>
+                    {pool.total_orders > 0 && pool.delivered_orders === pool.total_orders ? (
+                      <span className="px-2 py-1 rounded-full text-xs font-medium text-white bg-emerald-500">
+                        ALL DELIVERED
+                      </span>
+                    ) : pool.total_orders > 0 && pool.pending_orders === 0 ? (
+                      <span className="px-2 py-1 rounded-full text-xs font-medium text-white bg-purple-500">
+                        ASSIGNED
+                      </span>
+                    ) : pool.assigned_orders > 0 ? (
+                      <span className="px-2 py-1 rounded-full text-xs font-medium text-white bg-orange-500">
+                        PARTIALLY ASSIGNED
+                      </span>
+                    ) : (
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium text-white ${getStatusColor(pool.status)}`}>
+                        {pool.status}
+                      </span>
+                    )}
                   </div>
                   
                   <div className="grid grid-cols-2 gap-2 text-sm">
@@ -315,8 +330,8 @@ export default function PoolsPageNew() {
                       <p className="font-semibold text-amber-600">{pool.pending_orders}</p>
                     </div>
                     <div>
-                      <p className="text-slate-500">Assigned</p>
-                      <p className="font-semibold text-emerald-600">{pool.assigned_orders}</p>
+                      <p className="text-slate-500">Delivered</p>
+                      <p className="font-semibold text-emerald-600">{pool.delivered_orders || 0}</p>
                     </div>
                   </div>
 
@@ -332,7 +347,7 @@ export default function PoolsPageNew() {
         </div>
 
         {/* Orders & Assignment */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-4 sticky top-6 h-fit self-start">
           {!selectedPool ? (
             <div className="bg-white p-12 rounded-xl shadow-sm border border-slate-200 text-center">
               <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
